@@ -1,2 +1,32 @@
-./cmake-build-debug
-./build
+# ---- CMake build output ----
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/Makefile
+/cmake_install.cmake
+/install_manifest.txt
+/compile_commands.json
+
+# ---- Binaries ----
+/odz
+/odz.exe
+/*.o
+/*.obj
+/*.pdb
+
+# ---- Test artifacts ----
+/input
+/output.odz
+/roundtrip
+
+# ---- IDE / Editor ----
+# CLion / IntelliJ
+/.idea/
+/*.iml
+cmake-build-*/
+# VSCode
+.vscode/
+
+# ---- OS cruft ----
+.DS_Store
+Thumbs.db
