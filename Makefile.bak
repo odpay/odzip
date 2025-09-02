@@ -4,14 +4,14 @@ CC      := gcc
 CFLAGS  := -std=c17 -O2 -Wall -Wextra -pedantic -march=native -flto
 LDFLAGS := -flto
 TARGET  := odz
-SRC     := odz.c
+SRC     := main.c
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) compress.c decompress.c lz_hashchain.c odz_util.c
 
 run: $(TARGET)
 	./$(TARGET) c LICENSE output.odz

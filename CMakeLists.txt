@@ -4,7 +4,11 @@ project(odzip C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-add_executable(odz odz.c)
+add_executable(odz main.c
+        odz_util.c
+        lz_hashchain.c
+        compress.c
+        decompress.c)
 
 if (MSVC)
     target_compile_options(odz PRIVATE /O2 /W4)
