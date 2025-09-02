@@ -1,0 +1,22 @@
+# Makefile for ODZIP
+
+CC      := gcc
+CFLAGS  := -std=c17 -O2 -Wall -Wextra -pedantic -march=native -flto
+LDFLAGS := -flto
+TARGET  := odz
+SRC     := odz.c
+
+.PHONY: all clean run
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+run: $(TARGET)
+	./$(TARGET) c LICENSE output.odz
+	./$(TARGET) d output.odz roundtrip
+	cmp LICENSE roundtrip
+
+clean:
+	$(RM) $(TARGET) *.o output.odz roundtrip
