@@ -33,4 +33,4 @@ This project is in early alpha,
 - it WILL not be afraid to overwrite a file if given an output that already exists
 - it currently doesn't preserve file permissions/inode data.
 
-PRs/issues are welcome
+PRs/issues are welcome.
