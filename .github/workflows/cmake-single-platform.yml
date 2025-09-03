@@ -29,7 +29,7 @@ jobs:
 
     - name: Build
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -static
 
     - name: Test
       working-directory: ${{github.workspace}}/build
@@ -40,5 +40,5 @@ jobs:
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: odz
+        name: odz-linux
         path: build/odz
