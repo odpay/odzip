@@ -6,6 +6,8 @@
 /cmake_install.cmake
 /install_manifest.txt
 /compile_commands.json
+/.cmake/
+/Testing/
 
 # ---- Binaries ----
 /odz
@@ -14,10 +16,11 @@
 /*.obj
 /*.pdb
 
-# ---- Test artifacts ----
+# ---- Test artifacts / scratch files ----
 /input
 /output.odz
 /roundtrip
+*.odz
 
 # ---- IDE / Editor ----
 # CLion / IntelliJ

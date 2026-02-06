@@ -12,7 +12,7 @@ typedef struct {
 } lz_matcher_t;
 
 #define HASH_BITS 15
-#define MAX_CHAIN_STEPS 64
+#define MAX_CHAIN_STEPS 256
 
 int  lz_matcher_init(lz_matcher_t *m, size_t n_block, int hash_bits, int max_chain_steps);
 void lz_matcher_reset(lz_matcher_t *m, size_t n_block);
