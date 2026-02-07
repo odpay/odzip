@@ -79,3 +79,72 @@ jobs:
             odz-darwin-amd64.tar.gz
             odz-linux-amd64.tar.gz
             odz-windows-amd64.zip
+
+  update-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: odpay/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Update formula
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA_DARWIN_ARM64=$(sha256sum odz-darwin-arm64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_AMD64=$(sha256sum odz-darwin-amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(sha256sum odz-linux-amd64.tar.gz | cut -d' ' -f1)
+
+          cat > Formula/odz.rb << FORMULA
+          class Odz < Formula
+            desc "DEFLATE-class LZ77+Huffman compressor"
+            homepage "https://github.com/odpay/odzip"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/odpay/odzip/releases/download/v#{version}/odz-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/odpay/odzip/releases/download/v#{version}/odz-darwin-amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              url "https://github.com/odpay/odzip/releases/download/v#{version}/odz-linux-amd64.tar.gz"
+              sha256 "${SHA_LINUX_AMD64}"
+            end
+
+            def install
+              bin.install "odz"
+            end
+
+            test do
+              (testpath/"input.txt").write("hello world")
+              system bin/"odz", "c", "input.txt", "output.odz"
+              system bin/"odz", "d", "output.odz", "roundtrip.txt"
+              assert_equal "hello world", (testpath/"roundtrip.txt").read
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Formula/odz.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/odz.rb
+          git commit -m "odz ${GITHUB_REF_NAME}"
+          git push
