@@ -8,8 +8,7 @@ Archives & encryption coming soon.
 
 ### macOS / Linux (Homebrew)
 ```sh
-brew tap odpay/tap
-brew install odz
+brew install odpay/tap/odz
 ```
 
 ## Building
