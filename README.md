@@ -4,6 +4,14 @@ Minimal file compression.
 Archives & encryption coming soon.
 
 
+## Install
+
+### macOS / Linux (Homebrew)
+```sh
+brew tap odpay/tap
+brew install odz
+```
+
 ## Building
 clone the git project and you can build using either cmake, make, gcc/clang.
 
