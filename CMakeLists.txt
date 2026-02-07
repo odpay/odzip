@@ -17,7 +17,7 @@ add_executable(odz
 option(ODZ_PORTABLE "Build portable binary (no -march=native)" OFF)
 
 if (MSVC)
-    target_compile_options(odz PRIVATE /O2 /W4)
+    target_compile_options(odz PRIVATE /W4)
 else()
     target_compile_options(odz PRIVATE -O2 -Wall -Wextra -pedantic -flto)
     if (NOT ODZ_PORTABLE)

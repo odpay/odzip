@@ -37,7 +37,7 @@ jobs:
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
 
       - name: Test
-        run: cmake --build build --target run
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target run
 
       - name: Package (unix)
         if: runner.os != 'Windows'
