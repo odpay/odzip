@@ -14,10 +14,15 @@ add_executable(odz
     decompress.c
 )
 
+option(ODZ_PORTABLE "Build portable binary (no -march=native)" OFF)
+
 if (MSVC)
     target_compile_options(odz PRIVATE /O2 /W4)
 else()
-    target_compile_options(odz PRIVATE -O2 -Wall -Wextra -pedantic -march=native -flto)
+    target_compile_options(odz PRIVATE -O2 -Wall -Wextra -pedantic -flto)
+    if (NOT ODZ_PORTABLE)
+        target_compile_options(odz PRIVATE -march=native)
+    endif()
     target_link_options(odz PRIVATE -flto)
 endif()
 
