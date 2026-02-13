@@ -8,7 +8,14 @@ Archives & encryption coming soon.
 
 ### macOS / Linux (Homebrew)
 ```sh
-brew install odpay/tap/odz
+brew install odpay/tap/odzip
+```
+
+### Arch Linux (AUR)
+```sh
+paru -S odzip
+# or
+yay -S odzip
 ```
 
 ## Building
