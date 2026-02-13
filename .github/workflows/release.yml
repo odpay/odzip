@@ -80,6 +80,87 @@ jobs:
             odz-linux-amd64.tar.gz
             odz-windows-amd64.zip
 
+  update-aur:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update AUR package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(curl -sL "https://github.com/odpay/odzip/archive/${GITHUB_REF_NAME}.tar.gz" | sha256sum | cut -d' ' -f1)
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          echo -e "Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n  StrictHostKeyChecking no" > ~/.ssh/config
+
+          git clone ssh://aur@aur.archlinux.org/odzip.git aur-repo
+          cd aur-repo
+
+          cat > PKGBUILD << 'EOF'
+          # Maintainer: odpay <https://github.com/odpay>
+          pkgname=odzip
+          pkgver=VERSION_PH
+          pkgrel=1
+          pkgdesc='Minimal file compression using LZ77 hash-chain matching and Huffman coding'
+          arch=('x86_64')
+          url='https://github.com/odpay/odzip'
+          license=('MIT')
+          depends=('glibc')
+          provides=('odz')
+          makedepends=('cmake')
+          source=("$pkgname-$pkgver.tar.gz::https://github.com/odpay/odzip/archive/v$pkgver.tar.gz")
+          sha256sums=('SHA_PH')
+
+          build() {
+              cmake -B build -S "$pkgname-$pkgver" \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_INSTALL_PREFIX=/usr \
+                  -DODZ_PORTABLE=ON
+              cmake --build build
+          }
+
+          check() {
+              cmake --build build --target run
+          }
+
+          package() {
+              DESTDIR="$pkgdir" cmake --install build
+              install -Dm644 "$pkgname-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+          }
+          EOF
+
+          sed -i 's/^          //' PKGBUILD
+          sed -i "s/VERSION_PH/${VERSION}/g" PKGBUILD
+          sed -i "s/SHA_PH/${SHA}/g" PKGBUILD
+
+          # generate .SRCINFO
+          cat > .SRCINFO << SRCINFO
+          pkgbase = odzip
+          	pkgdesc = Minimal file compression using LZ77 hash-chain matching and Huffman coding
+          	pkgver = ${VERSION}
+          	pkgrel = 1
+          	url = https://github.com/odpay/odzip
+          	arch = x86_64
+          	license = MIT
+          	makedepends = cmake
+          	depends = glibc
+          	provides = odz
+          	source = odzip-${VERSION}.tar.gz::https://github.com/odpay/odzip/archive/v${VERSION}.tar.gz
+          	sha256sums = ${SHA}
+
+          pkgname = odzip
+          SRCINFO
+          sed -i 's/^          //' .SRCINFO
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${VERSION}"
+          git push
+
   update-tap:
     needs: release
     runs-on: ubuntu-latest
