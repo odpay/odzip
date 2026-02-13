@@ -182,8 +182,10 @@ jobs:
           SHA_DARWIN=$(sha256sum odz-darwin-universal.tar.gz | cut -d' ' -f1)
           SHA_LINUX=$(sha256sum odz-linux-amd64.tar.gz | cut -d' ' -f1)
 
-          cat > Formula/odz.rb << 'FORMULA'
-          class Odz < Formula
+          rm -f Formula/odz.rb
+
+          cat > Formula/odzip.rb << 'FORMULA'
+          class Odzip < Formula
             desc "DEFLATE-class LZ77+Huffman compressor"
             homepage "https://github.com/odpay/odzip"
             version "VERSION_PLACEHOLDER"
@@ -201,6 +203,7 @@ jobs:
 
             def install
               bin.install "odz"
+              bin.install_symlink "odz" => "odzip"
             end
 
             test do
@@ -212,15 +215,15 @@ jobs:
           end
           FORMULA
 
-          sed -i 's/^          //' Formula/odz.rb
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Formula/odz.rb
-          sed -i "s/SHA_DARWIN_PLACEHOLDER/${SHA_DARWIN}/g" Formula/odz.rb
-          sed -i "s/SHA_LINUX_PLACEHOLDER/${SHA_LINUX}/g" Formula/odz.rb
+          sed -i 's/^          //' Formula/odzip.rb
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Formula/odzip.rb
+          sed -i "s/SHA_DARWIN_PLACEHOLDER/${SHA_DARWIN}/g" Formula/odzip.rb
+          sed -i "s/SHA_LINUX_PLACEHOLDER/${SHA_LINUX}/g" Formula/odzip.rb
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/odz.rb
-          git commit -m "odz ${GITHUB_REF_NAME}"
+          git add -A Formula/
+          git commit -m "odzip ${GITHUB_REF_NAME}"
           git push

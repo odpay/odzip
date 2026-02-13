@@ -53,3 +53,4 @@ add_custom_target(tidy
 )
 
 install(TARGETS odz RUNTIME DESTINATION bin)
+install(CODE "execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink odz \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/odzip)")
