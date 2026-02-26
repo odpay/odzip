@@ -409,6 +409,8 @@ int huff_read_trees(bit_reader_t *br,
     int hlit  = (int)br_read(br, 5) + 257;
     int hdist = (int)br_read(br, 5) + 1;
     int hclen = (int)br_read(br, 4) + 4;
+    // fix: dont actually trust hlit/hdist too much as it is user-controlled
+    if (hlit > LITLEN_SYMS || hdist > DIST_SYMS) return -1;
 
     /* Read code-length code lengths */
     uint8_t cl_lens[CODELEN_SYMS];
