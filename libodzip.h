@@ -21,6 +21,7 @@ typedef int (*odz_progress_fn)(uint64_t processed, uint64_t total, void *userdat
 typedef struct {
     odz_progress_fn progress;
     void *userdata;
+    int threads;          /* 0 or 1 = single-threaded */
 } odz_options_t;
 
 int odz_compress(FILE *in, FILE *out, const odz_options_t *opts);

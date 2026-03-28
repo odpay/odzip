@@ -16,6 +16,8 @@
 #include "huffman.h"
 #include "lz_tables.h"
 
+#include "odz_thread.h"
+
 /* Decode one symbol using two-level table */
 static inline int huff_decode2(bit_reader_t *br,
                                const huff_decode_table_t *t) {
@@ -113,12 +115,41 @@ static int decompress_huffman_block(const uint8_t *comp, size_t comp_size,
     return ODZ_OK;
 }
 
+/* ── Parallel block decompression ──────────────────────────── */
+
+typedef struct {
+    int blk_type;
+    uint8_t *comp;
+    size_t comp_size;
+    uint8_t *out;
+    size_t raw_size;
+    size_t out_pos;
+    int err;
+    huff_decode_table_t ll_tab;
+    huff_decode_table_t d_tab;
+} decomp_job_t;
+
+static void *decomp_worker(void *arg) {
+    decomp_job_t *j = arg;
+    if (j->blk_type == ODZ_BLOCK_STORED) {
+        if (j->raw_size > 0)
+            memcpy(j->out, j->comp, j->raw_size);
+        j->out_pos = j->raw_size;
+        j->err = ODZ_OK;
+    } else {
+        j->out_pos = 0;
+        j->err = decompress_huffman_block(j->comp, j->comp_size,
+                                           j->out, j->raw_size, &j->out_pos,
+                                           &j->ll_tab, &j->d_tab);
+    }
+    return NULL;
+}
+
 /* ── Public API ────────────────────────────────────────────── */
 
 int odz_decompress(FILE *in, FILE *out, const odz_options_t *opts) {
     int rc = ODZ_OK;
-    uint8_t *block_out = NULL;
-    uint8_t *comp = NULL;
+    int nthreads = (opts && opts->threads > 1) ? opts->threads : 1;
 
     /* Read file header */
     uint8_t hdr[12];
@@ -129,78 +160,123 @@ int odz_decompress(FILE *in, FILE *out, const odz_options_t *opts) {
     uint64_t original_size = rd_u64le(hdr + 4);
     uint64_t total_out = 0;
 
-    block_out = malloc(ODZ_BLOCK_SIZE);
-    if (!block_out) return ODZ_ERR_OOM;
-
-    /* Allocate decode tables once, reuse across blocks */
-    huff_decode_table_t ll_tab = {.secondary = NULL, .secondary_size = 0, .secondary_cap = 0};
-    huff_decode_table_t d_tab  = {.secondary = NULL, .secondary_size = 0, .secondary_cap = 0};
-
-    for (;;) {
-        /* Read block header */
-        uint8_t blk_hdr[9];
-        if (fread(blk_hdr, 1, 1, in) != 1) { rc = ODZ_ERR_IO; goto cleanup; }
-
-        int is_last  = blk_hdr[0] & 1;
-        int blk_type = (blk_hdr[0] >> 1) & 3;
-
-        if (blk_type == ODZ_BLOCK_STORED) {
-            /* Read raw_size */
-            if (fread(blk_hdr + 1, 1, 4, in) != 4) { rc = ODZ_ERR_IO; goto cleanup; }
-            uint32_t raw_size = rd_u32le(blk_hdr + 1);
-            if (raw_size > ODZ_BLOCK_SIZE) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
-
-            /* Read and write raw data */
-            if (fread(block_out, 1, raw_size, in) != raw_size) { rc = ODZ_ERR_IO; goto cleanup; }
-            if (fwrite(block_out, 1, raw_size, out) != raw_size) { rc = ODZ_ERR_IO; goto cleanup; }
-            total_out += raw_size;
-
-        } else if (blk_type == ODZ_BLOCK_HUFFMAN) {
-            /* Read raw_size + compressed_size */
-            if (fread(blk_hdr + 1, 1, 8, in) != 8) { rc = ODZ_ERR_IO; goto cleanup; }
-            uint32_t raw_size  = rd_u32le(blk_hdr + 1);
-            uint32_t comp_size = rd_u32le(blk_hdr + 5);
-            if (raw_size > ODZ_BLOCK_SIZE) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
-
-            /* Read compressed data */
-            comp = malloc(comp_size);
-            if (!comp) { rc = ODZ_ERR_OOM; goto cleanup; }
-            if (fread(comp, 1, comp_size, in) != comp_size) { rc = ODZ_ERR_IO; goto cleanup; }
-
-            /* Decompress */
-            size_t out_pos = 0;
-            rc = decompress_huffman_block(comp, comp_size,
-                                          block_out, raw_size, &out_pos,
-                                          &ll_tab, &d_tab);
-            if (rc != ODZ_OK) { free(comp); comp = NULL; goto cleanup; }
-            if (out_pos != raw_size) { free(comp); comp = NULL; rc = ODZ_ERR_CORRUPT; goto cleanup; }
-
-            if (fwrite(block_out, 1, raw_size, out) != raw_size) { free(comp); comp = NULL; rc = ODZ_ERR_IO; goto cleanup; }
-            total_out += raw_size;
-            free(comp);
-            comp = NULL;
-        } else {
-            rc = ODZ_ERR_FORMAT;
-            goto cleanup;
-        }
-
-        /* Progress callback */
-        if (opts && opts->progress) {
-            if (opts->progress(total_out, original_size, opts->userdata) != 0) {
-                rc = ODZ_ERR_IO;
-                goto cleanup;
-            }
-        }
-
-        if (is_last) break;
+    /* Per-thread resources */
+    uint8_t **out_bufs = calloc(nthreads, sizeof(uint8_t *));
+    decomp_job_t *jobs = calloc(nthreads, sizeof(decomp_job_t));
+    odz_thread_t *tids = (nthreads > 1) ? malloc(nthreads * sizeof(odz_thread_t)) : NULL;
+    if (!out_bufs || !jobs || (nthreads > 1 && !tids)) {
+        rc = ODZ_ERR_OOM; goto cleanup;
+    }
+    for (int i = 0; i < nthreads; i++) {
+        out_bufs[i] = malloc(ODZ_BLOCK_SIZE);
+        if (!out_bufs[i]) { rc = ODZ_ERR_OOM; goto cleanup; }
     }
 
-    if (total_out != original_size) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
+    for (;;) {
+        /* Read batch of blocks */
+        int nblocks = 0;
+        int saw_last = 0;
+
+        for (int i = 0; i < nthreads && !saw_last; i++) {
+            uint8_t flags;
+            if (fread(&flags, 1, 1, in) != 1) { rc = ODZ_ERR_IO; goto cleanup; }
+
+            int is_last  = flags & 1;
+            int blk_type = (flags >> 1) & 3;
+            uint8_t blk_hdr[8];
+
+            jobs[i].blk_type = blk_type;
+            jobs[i].out = out_bufs[i];
+            jobs[i].err = ODZ_OK;
+            jobs[i].comp = NULL;
+
+            if (blk_type == ODZ_BLOCK_STORED) {
+                if (fread(blk_hdr, 1, 4, in) != 4) { rc = ODZ_ERR_IO; goto cleanup; }
+                uint32_t raw_size = rd_u32le(blk_hdr);
+                if (raw_size > ODZ_BLOCK_SIZE) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
+
+                jobs[i].raw_size = raw_size;
+                jobs[i].comp_size = 0;
+                if (raw_size > 0) {
+                    jobs[i].comp = malloc(raw_size);
+                    if (!jobs[i].comp) { rc = ODZ_ERR_OOM; goto cleanup; }
+                    if (fread(jobs[i].comp, 1, raw_size, in) != raw_size) {
+                        rc = ODZ_ERR_IO; goto cleanup;
+                    }
+                }
+            } else if (blk_type == ODZ_BLOCK_HUFFMAN) {
+                if (fread(blk_hdr, 1, 8, in) != 8) { rc = ODZ_ERR_IO; goto cleanup; }
+                uint32_t raw_size  = rd_u32le(blk_hdr);
+                uint32_t comp_size = rd_u32le(blk_hdr + 4);
+                if (raw_size > ODZ_BLOCK_SIZE) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
+
+                jobs[i].raw_size  = raw_size;
+                jobs[i].comp_size = comp_size;
+                jobs[i].comp = malloc(comp_size);
+                if (!jobs[i].comp) { rc = ODZ_ERR_OOM; goto cleanup; }
+                if (fread(jobs[i].comp, 1, comp_size, in) != comp_size) {
+                    rc = ODZ_ERR_IO; goto cleanup;
+                }
+            } else {
+                rc = ODZ_ERR_FORMAT; goto cleanup;
+            }
+
+            nblocks++;
+            if (is_last) saw_last = 1;
+        }
+
+        if (nblocks == 0) break;
+
+        /* Decompress -- main thread takes [0], spawn the rest */
+        for (int i = 1; i < nblocks; i++) {
+            if (odz_thread_create(&tids[i], decomp_worker, &jobs[i]) != 0) {
+                tids[i] = ODZ_THREAD_NULL;
+                decomp_worker(&jobs[i]);
+            }
+        }
+        decomp_worker(&jobs[0]);
+        for (int i = 1; i < nblocks; i++)
+            if (tids[i]) odz_thread_join(tids[i]);
+
+        /* Write results in order */
+        for (int i = 0; i < nblocks; i++) {
+            if (jobs[i].err) { rc = jobs[i].err; goto cleanup; }
+            if (jobs[i].blk_type == ODZ_BLOCK_HUFFMAN &&
+                jobs[i].out_pos != jobs[i].raw_size) {
+                rc = ODZ_ERR_CORRUPT; goto cleanup;
+            }
+
+            size_t n = (jobs[i].blk_type == ODZ_BLOCK_STORED)
+                     ? jobs[i].raw_size : jobs[i].out_pos;
+            if (fwrite(jobs[i].out, 1, n, out) != n) {
+                rc = ODZ_ERR_IO; goto cleanup;
+            }
+            total_out += n;
+
+            free(jobs[i].comp);
+            jobs[i].comp = NULL;
+
+            if (opts && opts->progress)
+                opts->progress(total_out, original_size, opts->userdata);
+        }
+
+        if (saw_last) break;
+    }
+
+    if (total_out != original_size) rc = ODZ_ERR_CORRUPT;
 
 cleanup:
-    huff_free_decode_table2(&ll_tab);
-    huff_free_decode_table2(&d_tab);
-    free(block_out);
-    free(comp);
+    if (jobs) {
+        for (int i = 0; i < nthreads; i++) {
+            free(jobs[i].comp);
+            huff_free_decode_table2(&jobs[i].ll_tab);
+            huff_free_decode_table2(&jobs[i].d_tab);
+        }
+    }
+    if (out_bufs)
+        for (int i = 0; i < nthreads; i++) free(out_bufs[i]);
+    free(out_bufs);
+    free(jobs);
+    free(tids);
     return rc;
 }

@@ -14,10 +14,26 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "libodzip.h"
 
 static void die(const char *m) { fprintf(stderr, "odz: error: %s\n", m); exit(1); }
+
+static int ncpus(void) {
+#ifdef _WIN32
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
+#else
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return n > 0 ? (int)n : 1;
+#endif
+}
 
 static int verbosity = 1;
 
@@ -58,6 +74,7 @@ static void usage(const char *prog) {
         "  -d              force decompress\n"
         "  -o, --out FILE  output file\n"
         "  -f, --force     overwrite existing output\n"
+        "  -j N            use N threads (default: all cores)\n"
         "  -v0             silent\n"
         "  -v1             progress (default)\n"
         "  -v2             verbose (progress + summary)\n"
@@ -71,6 +88,7 @@ static void usage(const char *prog) {
 int main(int argc, char **argv) {
     int force = 0;
     int mode = 0;   /* 0=auto, 'c'=compress, 'd'=decompress */
+    int threads = 0;
     const char *out_path = NULL;
     const char *positionals[3];
     int npos = 0;
@@ -91,6 +109,10 @@ int main(int argc, char **argv) {
             verbosity = 1;
         } else if (strcmp(a, "-v2") == 0) {
             verbosity = 2;
+        } else if (strcmp(a, "-j") == 0) {
+            if (++i >= argc) die("missing argument for -j");
+            threads = atoi(argv[i]);
+            if (threads < 1 || threads > 256) die("thread count must be 1-256");
         } else if (strcmp(a, "-o") == 0 || strcmp(a, "--out") == 0) {
             if (++i >= argc) die("missing argument for -o");
             out_path = argv[i];
@@ -153,9 +175,12 @@ int main(int argc, char **argv) {
     FILE *fout = fopen(out_path, "wb");
     if (!fout) { fclose(fin); die("cannot open output file"); }
 
+    if (threads == 0) threads = ncpus();
+
     odz_options_t opts = {
         .progress = (verbosity >= 1) ? progress_cb : NULL,
-        .userdata = NULL
+        .userdata = NULL,
+        .threads = threads
     };
 
     if (verbosity >= 2)

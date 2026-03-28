@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 option(ODZ_PORTABLE "Build portable binary (no -march=native)" OFF)
 
+find_package(Threads REQUIRED)
+
 set(LIB_SOURCES
     odz_util.c bitstream.c huffman.c lz_hashchain.c compress.c decompress.c
 )
@@ -14,12 +16,14 @@ set(LIB_SOURCES
 add_library(odzip_static STATIC ${LIB_SOURCES})
 set_target_properties(odzip_static PROPERTIES OUTPUT_NAME odzip)
 target_include_directories(odzip_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(odzip_static PUBLIC Threads::Threads)
 
 # Shared library
 add_library(odzip_shared SHARED ${LIB_SOURCES})
 set_target_properties(odzip_shared PROPERTIES OUTPUT_NAME odzip)
 target_compile_options(odzip_shared PRIVATE -fPIC)
 target_include_directories(odzip_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(odzip_shared PUBLIC Threads::Threads)
 
 # CLI links against static library
 add_executable(odz main.c)
