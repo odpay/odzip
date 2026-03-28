@@ -15,6 +15,10 @@
 /*.o
 /*.obj
 /*.pdb
+/*.a
+/*.lib
+/*.so
+/*.dylib
 
 # ---- Test artifacts / scratch files ----
 /input
