@@ -208,7 +208,9 @@ int odz_decompress(FILE *in, FILE *out, const odz_options_t *opts) {
                 if (fread(blk_hdr, 1, 8, in) != 8) { rc = ODZ_ERR_IO; goto cleanup; }
                 uint32_t raw_size  = rd_u32le(blk_hdr);
                 uint32_t comp_size = rd_u32le(blk_hdr + 4);
-                if (raw_size > ODZ_BLOCK_SIZE) { rc = ODZ_ERR_CORRUPT; goto cleanup; }
+                if (raw_size > ODZ_BLOCK_SIZE || comp_size > ODZ_BLOCK_SIZE) {
+                    rc = ODZ_ERR_CORRUPT; goto cleanup;
+                }
 
                 jobs[i].raw_size  = raw_size;
                 jobs[i].comp_size = comp_size;
