@@ -161,6 +161,20 @@ jobs:
           git commit -m "Update to ${VERSION}"
           git push
 
+  update-website:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger WASM rebuild on odzip.odpay.net
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            https://api.github.com/repos/odpay/odzip.odpay.net/dispatches \
+            -d '{"event_type":"odzip-release"}'
+        env:
+          TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
   update-tap:
     needs: release
     runs-on: ubuntu-latest
