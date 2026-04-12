@@ -4,6 +4,8 @@ Minimal file compression.
 Archives & encryption coming soon.
 
 
+**Web version:** [odzip.odpay.net](https://odzip.odpay.net)
+
 ## Install
 
 ### macOS / Linux (Homebrew)
